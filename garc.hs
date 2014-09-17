@@ -110,47 +110,34 @@ getIndividualFIMB (start, end, length) = do
 -- Hexdump all of a GARC's files' subfiles, each with a "### FILE a.b" header
 prettyGARC :: GARC -> String
 prettyGARC (GARC files) = do
-    (num, file) <- zip [0..] files
-    (subNum, subFile) <- zip [0..] file
-    printFile num subNum subFile
+    (num, file) <- zip ([0..] :: [Int]) files
+    (subNum, subFile) <- zip ([0..] :: [Int]) file
 
--- Hexdump a single GARC subfile with header
-printFile :: Int -> Int -> BL.ByteString -> String
-printFile num subNum file =
-    printf "### FILE %d.%d\n%s\n"
-    num subNum (hexDump file)
+    printf "### FILE %d.%d\n%s\n" num subNum (hexDump subFile)
 
 -- Build an actual hexdump; match xxd -u
 hexDump :: BL.ByteString -> String
-hexDump = unlines . map hexDumpLine . zip [0x0, 0x10..] . sixteenByteGroups
-
--- Build a single line of a hexdump
-hexDumpLine :: (Int, BL.ByteString) -> String
-hexDumpLine (lineNum, bytes) =
-    printf "%07X: %-39s  %s"
-    lineNum (hexDumpBytes bytes) (hexDumpASCII bytes)
+hexDump bytes = do
+    (lineNum, line) <- lines16 bytes
+    printf "%07X: %-39s  %s\n" lineNum (hexDumpBytes line) (hexDumpASCII line)
 
 -- Build the hex part of a hexdump line
 hexDumpBytes :: BL.ByteString -> String
-hexDumpBytes = intercalate " " . unfoldr hexDumpPair
-
--- Turn the first two bytes into a hex pair; keep the rest for unfoldr
-hexDumpPair :: BL.ByteString -> Maybe (String, BL.ByteString)
-hexDumpPair bytes | BL.null bytes = Nothing
-hexDumpPair bytes =
-    Just (
-        BL.unpack firstTwo >>= printf "%02X",
-        rest
-    )
-    where (firstTwo, rest) = BL.splitAt 2 bytes
+hexDumpBytes = intercalate " " . unfoldr col . (>>= printf "%02X") . BL.unpack
+    where
+        col "" = Nothing
+        col hexDigits = Just (splitAt 4 hexDigits)
 
 -- Build the ASCII part of a hexdump line
 hexDumpASCII :: BL.ByteString -> String
 hexDumpASCII = map (\c -> if ' ' <= c && c <= '~' then c else '.') . BLC.unpack
 
--- Split a byte string into strings of sixteen bytes
-sixteenByteGroups :: BL.ByteString -> [BL.ByteString]
-sixteenByteGroups = takeWhile (not . BL.null) . unfoldr (Just . BL.splitAt 16)
+-- Split a byte string into numbered sixteen-byte lines
+lines16 :: BL.ByteString -> [(Int, BL.ByteString)]
+lines16 = zip [0x0, 0x10..] . unfoldr line
+    where
+        line bytes | BL.null bytes = Nothing
+        line bytes = Just (BL.splitAt 16 bytes)
 
 
 -- From the command line: take filenames as args; read and pretty-print GARCs
