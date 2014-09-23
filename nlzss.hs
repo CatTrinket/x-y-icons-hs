@@ -8,24 +8,24 @@ import Data.Int (Int64)
 import Data.Word (Word8)
 
 -- Various extra word-getters
-GetWord8' = fmap fromIntegral getWord8
-GetWord16be' = fmap fromIntegral getWord16be
-GetWord24be' = fmap fromIntegral getWord24be
-GetWord32be' = fmap fromIntegral getWord32be
+getWord8' = fmap fromIntegral getWord8
+getWord16be' = fmap fromIntegral getWord16be
+getWord24be' = fmap fromIntegral getWord24be
+getWord32be' = fmap fromIntegral getWord32be
 
 getWord24be :: Get Int
 getWord24be = do
-    a <- GetWord8'
-    b <- GetWord8'
-    c <- GetWord8'
+    a <- getWord8'
+    b <- getWord8'
+    c <- getWord8'
 
     return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
 
 getWord24le :: Get Int
 getWord24le = do
-    a <- GetWord8'
-    b <- GetWord8'
-    c <- GetWord8'
+    a <- getWord8'
+    b <- getWord8'
+    c <- getWord8'
 
     return $ a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
 
@@ -83,21 +83,21 @@ getLZSS11BackRef = do
     case control of
         0 -> do
             -- 8 bit count, 12 bit offset
-            countOffset <- GetWord24be' :: Get Int64
+            countOffset <- getWord24be' :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFF) + 0x11
             let offset = (countOffset .&. 0xFFF) + 1
 
             return (count, offset)
         1 -> do
             -- 16 bit count, 12 bit offset
-            countOffset <- GetWord32be' :: Get Int64
+            countOffset <- getWord32be' :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFFFF) + 0x111
             let offset = (countOffset .&. 0xFFF) + 1
 
             return (count, offset)
         n -> do
             -- 4 bit count (instead of control), 12 bit offset
-            countOffset <- GetWord16be' :: Get Int64
+            countOffset <- getWord16be' :: Get Int64
             let count = (fromIntegral n + 1)
             let offset = (countOffset .&. 0xFFF) + 1
 
