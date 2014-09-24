@@ -3,24 +3,23 @@ module NLZSS (getLZSS11) where
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
 import Data.Binary.Get (Get, getWord8, getWord16be, getWord32be, lookAhead)
-import Data.Bits ((.&.), (.|.), shiftL, shiftR, testBit)
+import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR, testBit)
 import qualified Data.ByteString.Lazy as BL
 import Data.Int (Int64)
 import Data.Word (Word8)
 
--- Various extra word-getters
-getWord8' = fromIntegral <$> getWord8
-getWord16be' = fromIntegral <$> getWord16be
-getWord24be' = fromIntegral <$> getWord24be
-getWord32be' = fromIntegral <$> getWord32be
-
-getWord24be :: Get Int
+-- Big- and little-endian 24-bit word-getters
+getWord24be :: (Integral a, Bits a) => Get a
 getWord24be = combine <$> getWord8' <*> getWord8' <*> getWord8'
-    where combine a b c = (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+    where
+        combine a b c = (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+        getWord8' = fromIntegral <$> getWord8
 
-getWord24le :: Get Int
+getWord24le :: (Integral a, Bits a) => Get a
 getWord24le = combine <$> getWord8' <*> getWord8' <*> getWord8'
-    where combine a b c = a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
+    where
+        combine a b c = a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
+        getWord8' = fromIntegral <$> getWord8
 
 -- Parse header and decompress LZSS11
 getLZSS11 :: Get BL.ByteString
@@ -66,27 +65,27 @@ getLZSS11Bytes finalLength soFar flags flagsLeft = do
 getLZSS11BackRef :: Get (Int64, Int64)
 getLZSS11BackRef = do
     -- 4 bit control
-    control <- (`shiftR` 4) <$> (lookAhead getWord8)
+    control <- (`shiftR` 4) <$> lookAhead getWord8
 
     case control of
         0 -> do
             -- 8 bit count, 12 bit offset
-            countOffset <- getWord24be' :: Get Int64
+            countOffset <- getWord24be :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFF) + 0x11
             let offset = (countOffset .&. 0xFFF) + 1
 
             return (count, offset)
         1 -> do
             -- 16 bit count, 12 bit offset
-            countOffset <- getWord32be' :: Get Int64
+            countOffset <- fromIntegral <$> getWord32be :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFFFF) + 0x111
             let offset = (countOffset .&. 0xFFF) + 1
 
             return (count, offset)
         n -> do
             -- 4 bit count (instead of control), 12 bit offset
-            countOffset <- getWord16be' :: Get Int64
-            let count = (fromIntegral n + 1)
+            countOffset <- fromIntegral <$> getWord16be :: Get Int64
+            let count = fromIntegral n + 1
             let offset = (countOffset .&. 0xFFF) + 1
 
             return (count, offset)
