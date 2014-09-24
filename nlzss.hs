@@ -1,5 +1,6 @@
 module NLZSS (getLZSS11) where
 
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad (replicateM, replicateM_, when)
 import Data.Binary.Get (Get, getWord8, getWord16be, getWord32be, lookAhead)
 import Data.Bits ((.&.), (.|.), shiftL, shiftR, testBit)
@@ -8,26 +9,18 @@ import Data.Int (Int64)
 import Data.Word (Word8)
 
 -- Various extra word-getters
-getWord8' = fmap fromIntegral getWord8
-getWord16be' = fmap fromIntegral getWord16be
-getWord24be' = fmap fromIntegral getWord24be
-getWord32be' = fmap fromIntegral getWord32be
+getWord8' = fromIntegral <$> getWord8
+getWord16be' = fromIntegral <$> getWord16be
+getWord24be' = fromIntegral <$> getWord24be
+getWord32be' = fromIntegral <$> getWord32be
 
 getWord24be :: Get Int
-getWord24be = do
-    a <- getWord8'
-    b <- getWord8'
-    c <- getWord8'
-
-    return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+getWord24be = combine <$> getWord8' <*> getWord8' <*> getWord8'
+    where combine a b c = (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
 
 getWord24le :: Get Int
-getWord24le = do
-    a <- getWord8'
-    b <- getWord8'
-    c <- getWord8'
-
-    return $ a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
+getWord24le = combine <$> getWord8' <*> getWord8' <*> getWord8'
+    where combine a b c = a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
 
 -- Parse header and decompress LZSS11
 getLZSS11 :: Get BL.ByteString
@@ -45,24 +38,19 @@ getLZSS11 = do
 getLZSS11Bytes :: Int -> BL.ByteString -> Word8 -> Int -> Get BL.ByteString
 getLZSS11Bytes finalLength soFar flags flagsLeft = do
     -- Read a flag byte if necessary
-    (flags, flagsLeft) <-
+    (flagsLeft, flags) <-
         if flagsLeft == 0
-        then do
-            newFlags <- getWord8
-            return (newFlags, 8)
-        else return (flags, flagsLeft)
+        then (,) 8 <$> getWord8
+        else return (flagsLeft, flags)
 
-    -- Depending on the next flag, either...
+    -- Depending on the next flag, either append a previously-seen string of
+    -- bytes or copy one byte verbatim
     soFar <-
         if flags `testBit` 7
         then do
-            -- Append a previously-seen string of bytes
             (count, offset) <- getLZSS11BackRef
             return $ soFar `BL.append` (applyBackref soFar count offset)
-        else do
-            -- Copy one byte verbatim
-            byte <- getWord8
-            return (soFar `BL.snoc` byte)
+        else BL.snoc soFar <$> getWord8
 
     -- Return our decompressed data if we're done; otherwise recurse
     let lengthSoFar = (fromIntegral . BL.length) soFar
@@ -78,7 +66,7 @@ getLZSS11Bytes finalLength soFar flags flagsLeft = do
 getLZSS11BackRef :: Get (Int64, Int64)
 getLZSS11BackRef = do
     -- 4 bit control
-    control <- fmap (`shiftR` 4) (lookAhead getWord8)
+    control <- (`shiftR` 4) <$> (lookAhead getWord8)
 
     case control of
         0 -> do
