@@ -1,7 +1,7 @@
 module NLZSS (getLZSS11) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Monad (replicateM, replicateM_, when)
+import Control.Monad (when)
 import Data.Binary.Get (Get, getWord8, getWord16be, getWord32be, lookAhead)
 import Data.Bits ((.&.), (.|.), shiftL, shiftR, testBit)
 import qualified Data.ByteString.Lazy as BL
