@@ -91,8 +91,7 @@ getLZSS11BackRef = do
 
             return (count, offset)
 
--- Copy `count` bytes to the end of the byte string, starting `offset` bytes
--- from the end
+-- `count` bytes, starting `offset` bytes from the end
 applyBackref :: BL.ByteString -> Int64 -> Int64 -> BL.ByteString
 applyBackref bytes count offset
     | offset > bytesLength =
