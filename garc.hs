@@ -5,7 +5,7 @@ import Data.Binary.Get (bytesRead, getLazyByteString, getWord16le, getWord32le,
 import Data.Bits ((.&.), shiftR, popCount)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
-import Data.List (intercalate, unfoldr)
+import Data.List (unfoldr)
 import System.Environment (getArgs)
 import Text.Printf (printf)
 
@@ -130,7 +130,7 @@ lines16 = zip [0x0, 0x10..] . unfoldr line
 
 -- Build the hex part of a hexdump line
 hexDumpBytes :: BL.ByteString -> String
-hexDumpBytes = intercalate " " . unfoldr col . (>>= printf "%02X") . BL.unpack
+hexDumpBytes = unwords . unfoldr col . (>>= printf "%02X") . BL.unpack
     where
         col "" = Nothing
         col hexDigits = Just (splitAt 4 hexDigits)
