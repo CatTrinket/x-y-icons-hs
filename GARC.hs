@@ -1,13 +1,12 @@
+module GARC (GARC(..)) where
+
 import Control.Monad (liftM3, replicateM, when)
-import Data.Binary (Binary, Get, get, put, decodeFile, encode)
+import Data.Binary (Binary, Get, get, put)
 import Data.Binary.Get (bytesRead, getLazyByteString, getWord16le, getWord32le,
     lookAhead, skip)
-import Data.Bits ((.&.), shiftR, popCount)
+import Data.Bits (popCount)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
-import Data.List (unfoldr)
-import System.Environment (getArgs)
-import Text.Printf (printf)
 
 
 -- Include fromIntegral in Word-getters to avoid littering it everywhere
@@ -104,44 +103,3 @@ getIndividualFIMB :: (Int, Int, Int) -> Get BL.ByteString
 getIndividualFIMB (start, end, length) = do
     skip start
     getLazyByteString (fromIntegral length)
-
-
--- Stuff for pretty-printing the contents of a GARC
--- Hexdump all of a GARC's files' subfiles, each with a "### FILE a.b" header
-prettyGARC :: GARC -> String
-prettyGARC (GARC files) = do
-    (num, file) <- zip ([0..] :: [Int]) files
-    (subNum, subFile) <- zip ([0..] :: [Int]) file
-
-    printf "### FILE %d.%d\n%s\n" num subNum (hexDump subFile)
-
--- Build an actual hexdump; match xxd -u
-hexDump :: BL.ByteString -> String
-hexDump bytes = do
-    (lineNum, line) <- lines16 bytes
-    printf "%07X: %-39s  %s\n" lineNum (hexDumpBytes line) (hexDumpASCII line)
-
--- Split a byte string into numbered sixteen-byte lines
-lines16 :: BL.ByteString -> [(Int, BL.ByteString)]
-lines16 = zip [0x0, 0x10..] . unfoldr line
-    where
-        line bytes | BL.null bytes = Nothing
-        line bytes = Just (BL.splitAt 16 bytes)
-
--- Build the hex part of a hexdump line
-hexDumpBytes :: BL.ByteString -> String
-hexDumpBytes = unwords . unfoldr col . (>>= printf "%02X") . BL.unpack
-    where
-        col "" = Nothing
-        col hexDigits = Just (splitAt 4 hexDigits)
-
--- Build the ASCII part of a hexdump line
-hexDumpASCII :: BL.ByteString -> String
-hexDumpASCII = map (\c -> if ' ' <= c && c <= '~' then c else '.') . BLC.unpack
-
-
--- From the command line: take filenames as args; read and pretty-print GARCs
-main = do
-    filenames <- getArgs
-    garcs <- mapM decodeFile filenames
-    mapM_ (putStrLn . prettyGARC) garcs
