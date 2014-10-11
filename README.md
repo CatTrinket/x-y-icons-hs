@@ -4,3 +4,6 @@ test it on.)
 
 This is an obviously-not-finished-yet Haskell port of [pokemon-x-y-icons]
 (https://github.com/Zhorken/pokemon-x-y-icons), which I wrote in Python.
+
+Requires [JuicyPixels](https://hackage.haskell.org/package/JuicyPixels) (tested
+with 3.1.7.1).

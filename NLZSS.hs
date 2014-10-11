@@ -1,8 +1,9 @@
-module NLZSS (getLZSS11) where
+module NLZSS (decompress, getLZSS11) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
-import Data.Binary.Get (Get, getWord8, getWord16be, getWord32be, lookAhead)
+import Data.Binary.Get (Get, getWord8, getWord16be, getWord32be, lookAhead,
+    runGet)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR, testBit)
 import qualified Data.ByteString.Lazy as BL
 import Data.Int (Int64)
@@ -20,6 +21,10 @@ getWord24le = combine <$> getWord8' <*> getWord8' <*> getWord8'
     where
         combine a b c = a .|. (b `shiftL` 8) .|. (c `shiftL` 16)
         getWord8' = fromIntegral <$> getWord8
+
+-- Convenience function; decompress a ByteString via getLZSS11
+decompress :: BL.ByteString -> BL.ByteString
+decompress = runGet getLZSS11
 
 -- Parse header and decompress LZSS11
 getLZSS11 :: Get BL.ByteString
