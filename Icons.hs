@@ -1,8 +1,9 @@
 import Control.Applicative ((<$>))
 import Control.Monad (replicateM)
 import Data.Binary (Binary, decode, get, put)
-import Data.Binary.Get (Get, getWord8, getWord16le, runGet, skip)
+import Data.Binary.Get (Get, getByteString, getWord16le, runGet, skip)
 import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Word (Word8)
 import GARC (GARC(files))
@@ -60,23 +61,37 @@ instance Binary Icon where
         pixels <- getPixels (length palette > 16)
         return (Icon palette pixels)
 
-getPixels :: Bool -> Get [Int]
-getPixels True = untile <$> replicateM (rawWidth * rawHeight) getWord8'
+-- Get 64 * 32 pixels; each byte contains one or two pixels, depending on
+-- whether the palette is short enough (indicated by the Bool argument).
+getPixels :: Bool -> Get [Pixel]
+getPixels True =
+    untile . map fromIntegral . B.unpack <$>
+    getByteString (rawWidth * rawHeight)
+
 getPixels False =
-    untile . concatMap splitPixels <$>
-    replicateM (rawWidth * rawHeight `div` 2) getWord8'
+    untile . map fromIntegral . concatMap splitPixels . B.unpack <$>
+    getByteString (rawWidth * rawHeight `div` 2)
     where splitPixels byte = [byte `shiftR` 4, byte .&. 0x0F]
 
-getWord8' :: Integral a => Get a
-getWord8' = fromIntegral <$> getWord8
+-- Untile pixels — pixels are arranged in tiles of 8×8 pixels, and pixels
+-- within each tile are arranged in a third-iteration Z-order curve; undo this
+untile :: [Pixel] -> [Pixel]
+untile pixels = map (pixels !!) untileIndexMap
 
+-- Take a pre-untiling index, and return the new index where the pixel at that
+-- index should be moved to
 untileIndex :: Int -> Int
 untileIndex n = tileNum * 64 + withinTile
     where
         (y, x) = n `divMod` rawWidth
+
         (tileX, subX) = x `divMod` 8
         (tileY, subY) = y `divMod` 8
+
         tileNum = tileY * (rawWidth `div` 8) + tileX
+
+        -- This, except backwards:
+        -- https://en.wikipedia.org/wiki/Z-order_curve#Coordinate_values
         withinTile =
             (subX .&. 0x01) .|.
             ((subX .&. 0x02) `shiftL` 1) .|.
@@ -86,11 +101,14 @@ untileIndex n = tileNum * 64 + withinTile
             ((subY .&. 0x02) `shiftL` 2) .|.
             ((subY .&. 0x04) `shiftL` 3)
 
-untile :: [Pixel] -> [Pixel]
-untile pixels = map ((pixels !!) . untileIndex) [0 .. rawWidth * rawHeight - 1]
+untileIndexMap :: [Int]
+untileIndexMap = map untileIndex [0 .. rawWidth * rawHeight - 1]
 
+
+-- Take the entire, raw icon GARC and unpack all the icons
 unpackIcons :: BL.ByteString -> [Icon]
-unpackIcons = map (runGet (get :: Get Icon)) . map decompress . concat . files . decode
+unpackIcons = map (runGet (get :: Get Icon)) . map decompress . concat .
+    files . decode
 
 -- Find the icon file, given the ROM dump directory
 iconPath :: FilePath -> FilePath
@@ -122,7 +140,7 @@ saveIcon dir (n, icon) = writePng path image
         image = iconToImage icon
 
 
--- 
+-- Rip all the icons when called from the command line
 main = do
     (romDir:outputDir:_) <- getArgs
     icons <- unpackIcons <$> BL.readFile (iconPath romDir)
