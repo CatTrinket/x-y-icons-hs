@@ -6,13 +6,15 @@ import Data.Bits (Bits, (.&.), (.|.), shiftL, shiftR)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Word (Word8)
-import GARC (GARC(files))
-import NLZSS (decompress)
 import System.Environment (getArgs)
 import System.FilePath (joinPath)
 import Text.Printf (printf)
 
 import Codec.Picture (Image, PixelRGBA8(..), generateImage, writePng)
+
+import GARC (GARC(files))
+import NLZSS (decompress)
+
 
 -- The size the image is stored as, versus its actual intended dimensions.
 -- Each icon has a footer at 0x1000 that contains this info, but it's always
