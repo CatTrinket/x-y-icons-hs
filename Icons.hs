@@ -118,7 +118,9 @@ iconPath dir = joinPath [dir, "romfs", "a", "0", "9", "3"]
 
 
 -- Turn an Icon into something we can feed to JuicyPixels — at the time of
--- writing, JuicyPixels doesn't do palette + transparency
+-- writing, JuicyPixels doesn't do palette + transparency.  Also crop it from
+-- 64×32 to 40×30 — getPixel gets a pixel within the 64×32 icon, but it only
+-- gets 40×30 pixels.
 iconToImage :: Icon -> Image PixelRGBA8
 iconToImage (Icon palette pixels) = generateImage getPixel width height
     where
