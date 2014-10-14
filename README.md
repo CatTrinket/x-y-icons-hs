@@ -11,5 +11,8 @@ writing, I can't fix either of these issues with JuicyPixels, and there doesn't
 seem to be any better alternative.  (JuicyPixels can handle palettes, but not
 with transparency.)
 
+It also doesn't create nice filenames or flip icons that should be flipped but
+those should be easier to fix.
+
 [JuicyPixels]: https://hackage.haskell.org/package/JuicyPixels
 [pokemon-x-y-icons]: https://github.com/Zhorken/pokemon-x-y-icons
