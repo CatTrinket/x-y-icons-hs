@@ -1,6 +1,6 @@
 module GARC (GARC(..)) where
 
-import Control.Monad (liftM3, replicateM, when)
+import Control.Monad (liftM3, replicateM)
 import Data.Binary (Binary, Get, get, put)
 import Data.Binary.Get (bytesRead, getLazyByteString, getWord16le, getWord32le,
     lookAhead, skip)
@@ -30,44 +30,33 @@ instance Binary GARC where
 -- GARC header
 getGARCHeader :: Get Int
 getGARCHeader = do
-    magic <- getLazyByteString 4  -- Always CRAG
-    headerSize <- getWord32le'  -- Always 0x0000001C
-    byteOrderMark <- getWord16le'  -- Always 0xFEFF
-    unknown <- getWord16le'  -- Always 0x0400
-    chunks <- getWord32le'  -- Always 0x00000004
+    "CRAG" <- BLC.unpack `fmap` getLazyByteString 4  -- "Magic bytes"
+    0x0000001C <- getWord32le  -- Header length
+    0xFEFF <- getWord16le  -- Byte order mark
+    0x0400 <- getWord16le  -- Unknown
+    0x00000004 <- getWord32le  -- Chunk count
     dataOffset <- getWord32le'  -- Start of actual data
-    garcLength <- getWord32le'  -- Length of entire GARC
-    lastLength <- getWord32le'  -- ????? (this is what I called it in garc.py)
-
-    when (magic /= (BLC.pack "CRAG")) (error "wrong magic in GARC header")
-    when (headerSize /= 0x0000001C) (error "wrong header size in GARC header")
-    when (byteOrderMark /= 0xFEFF) (error "wrong BOM in GARC header")
-    when (unknown /= 0x0400) (error "wrong unknown in GARC header")
-    when (chunks /= 0x00000004) (error "wrong chunk count in GARC header")
+    skip 4  -- Length of entire GARC
+    skip 4  -- Unknown (called "last_length" in Python version)
 
     return dataOffset  -- This is all that's useful
 
 -- FATO section
 getFATO :: Get [Int]
 getFATO = do
-    magic <- getLazyByteString 4  -- Always OTAF
-    fatoLength <- getWord32le'  -- Length of this header + FATB offset list
+    "OTAF" <- BLC.unpack `fmap` getLazyByteString 4  -- "Magic bytes"
+    skip 4  -- Length of this header + FATB offset list
     offsetCount <- getWord16le'  -- Number of FATB offsets
-    padding <- getWord16le'  -- Always 0xFFFF
-
-    when (magic /= (BLC.pack "OTAF")) (error "wrong magic in FATO header")
-    when (padding /= 0xFFFF) (error "wrong padding in FATO header")
+    0xFFFF <- getWord16le  -- Padding
 
     replicateM offsetCount getWord32le'  -- FATB offsets
 
 -- FATB section
 getFATB :: [Int] -> Get [[(Int, Int, Int)]]
 getFATB offsets = do
-    magic <- getLazyByteString 4  -- Always BTAF
+    "BTAF" <- BLC.unpack `fmap` getLazyByteString 4  -- "Magic bytes"
     fatbLength <- getWord32le'
-    fileCount <- getWord32le'
-
-    when (magic /= (BLC.pack "BTAF")) (error "wrong magic in FATB header")
+    skip 4  -- File count
 
     fileOffsets <- mapM lookAhead (map getIndividualFATB offsets)
 
@@ -87,14 +76,11 @@ getIndividualFATB offset = do
 -- FIMB section
 getFIMB :: Int -> [[(Int, Int, Int)]] -> Get [[BL.ByteString]]
 getFIMB filesStart fileOffsets = do
-    magic <- getLazyByteString 4  -- Always BMIF
-    headerSize <- getWord32le'  -- Always 0x0000000C
-    fimbLength <- getWord32le'
+    "BMIF" <- BLC.unpack `fmap` getLazyByteString 4  -- "Magic bytes"
+    0x0000000C <- getWord32le  -- Header size
+    skip 4  -- FIMB length
 
-    when (magic /= (BLC.pack "BMIF")) (error "wrong magic in FIMB header")
-    when (headerSize /= 0x0000000C) (error "wrong header size in FIMB header")
-
-    position <- fmap fromIntegral bytesRead
+    position <- fromIntegral `fmap` bytesRead
     skip (filesStart - position)
 
     mapM (mapM lookAhead) (map (map getIndividualFIMB) fileOffsets)
