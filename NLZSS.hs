@@ -79,28 +79,30 @@ getLZSS11BackRef = do
             -- 8 bit count, 12 bit offset
             countOffset <- getWord24be :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFF) + 0x11
-            let offset = (countOffset .&. 0xFFF) + 1
+            let offset = countOffset .&. 0xFFF
 
             return (count, offset)
         1 -> do
             -- 16 bit count, 12 bit offset
             countOffset <- fromIntegral <$> getWord32be :: Get Int64
             let count = ((countOffset `shiftR` 12) .&. 0xFFFF) + 0x111
-            let offset = (countOffset .&. 0xFFF) + 1
+            let offset = countOffset .&. 0xFFF
 
             return (count, offset)
         n -> do
             -- 4 bit count (instead of control), 12 bit offset
             countOffset <- fromIntegral <$> getWord16be :: Get Int64
             let count = fromIntegral n + 1
-            let offset = (countOffset .&. 0xFFF) + 1
+            let offset = countOffset .&. 0xFFF
 
             return (count, offset)
 
 
 
--- `count` bytes, starting `offset` bytes from the end
+-- Append `count` bytes, starting `offset` bytes before the last byte — but
+-- the data we're working with is backwards, so by "append" I mean "prepend"
+-- and by "last" I mean "first".
 applyBackref :: BL.ByteString -> Int64 -> Int64 -> BL.ByteString
 applyBackref bytes 0 _ = bytes
 applyBackref bytes count offset = applyBackref bytes' (count - 1) offset
-    where bytes' = (bytes `BL.index` (offset - 1)) `BL.cons` bytes
+    where bytes' = (bytes `BL.index` offset) `BL.cons` bytes
