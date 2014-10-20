@@ -38,7 +38,9 @@ getLZSS11 = do
     then return BL.empty
     else getLZSS11Bytes finalLength BL.empty 0 0
 
--- Recursively decompress the actual compressed part of LZSS11
+-- Recursively decompress the actual compressed part of LZSS11.  Build it up
+-- backwards because sticking bytes on the beginning is more efficient, then
+-- reverse the final result.
 getLZSS11Bytes :: Int -> BL.ByteString -> Word8 -> Int -> Get BL.ByteString
 getLZSS11Bytes finalLength soFar flags flagsLeft = do
     -- Read a flag byte if necessary
@@ -53,8 +55,8 @@ getLZSS11Bytes finalLength soFar flags flagsLeft = do
         if flags `testBit` 7
         then do
             (count, offset) <- getLZSS11BackRef
-            return $ soFar `BL.append` (applyBackref soFar count offset)
-        else BL.snoc soFar <$> getWord8
+            return (applyBackref soFar count offset)
+        else (`BL.cons` soFar) <$> getWord8
 
     -- Return our decompressed data if we're done; otherwise recurse
     let lengthSoFar = (fromIntegral . BL.length) soFar
@@ -62,11 +64,11 @@ getLZSS11Bytes finalLength soFar flags flagsLeft = do
     when (lengthSoFar > finalLength) (error "Somehow we got too long")
 
     if lengthSoFar == finalLength
-    then return soFar
+    then return (BL.reverse soFar)
     else getLZSS11Bytes finalLength soFar (flags `shiftL` 1) (flagsLeft - 1)
 
 -- Get a count/offset backref pair
--- We specifically get Int64s because BL.take, BL.drop, and BL.length need them
+-- We specifically get Int64s because BL.index needs them
 getLZSS11BackRef :: Get (Int64, Int64)
 getLZSS11BackRef = do
     -- 4 bit control
@@ -95,12 +97,10 @@ getLZSS11BackRef = do
 
             return (count, offset)
 
+
+
 -- `count` bytes, starting `offset` bytes from the end
 applyBackref :: BL.ByteString -> Int64 -> Int64 -> BL.ByteString
-applyBackref bytes count offset
-    | offset > bytesLength =
-        error "Offset larger than so-far-decompressed byte string"
-    | otherwise = BL.take count . BL.cycle . takeEnd offset $ bytes
-    where
-        bytesLength = BL.length bytes
-        takeEnd offset bytes = BL.drop (bytesLength - offset) bytes
+applyBackref bytes 0 _ = bytes
+applyBackref bytes count offset = applyBackref bytes' (count - 1) offset
+    where bytes' = (bytes `BL.index` (offset - 1)) `BL.cons` bytes
