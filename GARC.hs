@@ -23,9 +23,8 @@ instance Binary GARC where
         dataOffset <- getGARCHeader
         fatbOffsets <- getFATO
         fileOffsets <- getFATB fatbOffsets
-        files <- getFIMB dataOffset fileOffsets
 
-        return (GARC files)
+        GARC `fmap` getFIMB dataOffset fileOffsets
 
 -- GARC header
 getGARCHeader :: Get Int
@@ -86,6 +85,6 @@ getFIMB filesStart fileOffsets = do
     mapM (mapM lookAhead) (map (map getIndividualFIMB) fileOffsets)
 
 getIndividualFIMB :: (Int, Int, Int) -> Get BL.ByteString
-getIndividualFIMB (start, end, length) = do
+getIndividualFIMB (start, end, fimbLength) = do
     skip start
-    getLazyByteString (fromIntegral length)
+    getLazyByteString (fromIntegral fimbLength)

@@ -44,28 +44,28 @@ getLZSS11 = do
 getLZSS11Bytes :: Int -> BL.ByteString -> Word8 -> Int -> Get BL.ByteString
 getLZSS11Bytes finalLength soFar flags flagsLeft = do
     -- Read a flag byte if necessary
-    (flagsLeft, flags) <-
+    (flagsLeft', flags') <-
         if flagsLeft == 0
         then (,) 8 <$> getWord8
         else return (flagsLeft, flags)
 
     -- Depending on the next flag, either append a previously-seen string of
     -- bytes or copy one byte verbatim
-    soFar <-
-        if flags `testBit` 7
+    soFar' <-
+        if flags' `testBit` 7
         then do
             (count, offset) <- getLZSS11BackRef
             return (applyBackref soFar count offset)
         else (`BL.cons` soFar) <$> getWord8
 
     -- Return our decompressed data if we're done; otherwise recurse
-    let lengthSoFar = (fromIntegral . BL.length) soFar
+    let lengthSoFar = (fromIntegral . BL.length) soFar'
 
     when (lengthSoFar > finalLength) (error "Somehow we got too long")
 
     if lengthSoFar == finalLength
-    then return (BL.reverse soFar)
-    else getLZSS11Bytes finalLength soFar (flags `shiftL` 1) (flagsLeft - 1)
+    then return (BL.reverse soFar')
+    else getLZSS11Bytes finalLength soFar (flags' `shiftL` 1) (flagsLeft' - 1)
 
 -- Get a count/offset backref pair
 -- We specifically get Int64s because BL.index needs them
