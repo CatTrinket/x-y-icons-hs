@@ -41,13 +41,13 @@ getLZSS11 = do
 -- Recursively decompress the actual compressed part of LZSS11.  Build it up
 -- backwards because sticking bytes on the beginning is more efficient, then
 -- reverse the final result.
-getLZSS11Bytes :: Int -> BL.ByteString -> Word8 -> Int -> Get BL.ByteString
-getLZSS11Bytes finalLength soFar flags flagsLeft = do
-    -- Read a flag byte if necessary
+getLZSS11Bytes :: Int -> BL.ByteString -> Int -> Word8 -> Get BL.ByteString
+getLZSS11Bytes finalLength soFar flagsLeft flags = do
+    -- Update the flags
     (flagsLeft', flags') <-
-        if flagsLeft == 0
-        then (,) 8 <$> getWord8
-        else return (flagsLeft, flags)
+        if flagsLeft > 1
+        then return (flagsLeft - 1, flags `shiftL` 1)
+        else (,) 8 <$> getWord8
 
     -- Depending on the next flag, either append a previously-seen string of
     -- bytes or copy one byte verbatim
@@ -59,16 +59,14 @@ getLZSS11Bytes finalLength soFar flags flagsLeft = do
         else (`BL.cons` soFar) <$> getWord8
 
     -- Return our decompressed data if we're done; otherwise recurse
-    let lengthSoFar = (fromIntegral . BL.length) soFar'
-
-    when (lengthSoFar > finalLength) (error "Somehow we got too long")
-
-    if lengthSoFar == finalLength
-    then return (BL.reverse soFar')
-    else getLZSS11Bytes finalLength soFar (flags' `shiftL` 1) (flagsLeft' - 1)
+    case fromIntegral (BL.length soFar') `compare` finalLength of
+        LT -> getLZSS11Bytes finalLength soFar' flagsLeft' flags'
+        EQ -> return (BL.reverse soFar')
+        GT -> error "Somehow we got too long"
 
 -- Get a count/offset backref pair
--- We specifically get Int64s because BL.index needs them
+-- We specifically get Int64s because BL.index needs offset to be one later,
+-- and count is derived from the same packed integer
 getLZSS11BackRef :: Get (Int64, Int64)
 getLZSS11BackRef = do
     -- 4 bit control
@@ -97,11 +95,9 @@ getLZSS11BackRef = do
 
             return (count, offset)
 
-
-
 -- Append `count` bytes, starting `offset` bytes before the last byte — but
 -- the data we're working with is backwards, so by "append" I mean "prepend"
--- and by "last" I mean "first".
+-- and by "before the last" I mean "after the first".
 applyBackref :: BL.ByteString -> Int64 -> Int64 -> BL.ByteString
 applyBackref bytes 0 _ = bytes
 applyBackref bytes count offset = applyBackref bytes' (count - 1) offset

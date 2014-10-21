@@ -70,7 +70,7 @@ getIndividualFATB offset = do
 
     -- Read 32-bit bitfield; get (start, end, length) for each bit set
     -- (Ignoring *which* bits are set — 011 and 101 are both just "two bits")
-    fileCount <- popCount <$> getWord32le'
+    fileCount <- popCount <$> getWord32le
     replicateM fileCount $
         (,,) <$> getWord32le' <*> getWord32le' <*> getWord32le'
 
